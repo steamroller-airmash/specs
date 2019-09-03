@@ -11,6 +11,7 @@ pub use self::{
     },
     storages::{BTreeStorage, DenseVecStorage, HashMapStorage, NullStorage, VecStorage},
     track::{ComponentEvent, Tracked},
+    debug::{DebugEntity}
 };
 
 use std::{
@@ -43,6 +44,7 @@ mod storages;
 #[cfg(test)]
 mod tests;
 mod track;
+mod debug;
 
 /// An inverted storage type, only useful to iterate entities
 /// that do not have a particular component type.
@@ -73,6 +75,9 @@ unsafe impl<'a> ParJoin for AntiStorage<'a> {}
 pub trait AnyStorage {
     /// Drop components of given entities.
     fn drop(&mut self, entities: &[Entity]);
+
+    /// Get a debug representation of the entity
+    fn debug_entity<'a>(&'a self, entity: Entity) -> Option<Box<dyn DebugEntity + 'a>>;
 }
 
 unsafe impl<T> CastFrom<T> for dyn AnyStorage
@@ -96,6 +101,20 @@ where
         for entity in entities {
             MaskedStorage::drop(self, entity.id());
         }
+    }
+
+    fn debug_entity<'a>(&'a self, entity: Entity) -> Option<Box<dyn DebugEntity + 'a>> {
+        use self::debug::EntityDebugWrapper;
+
+        if !self.mask.contains(entity.id()) {
+            return None;
+        }
+
+        let wrapper: EntityDebugWrapper<'a, T> = unsafe {
+            EntityDebugWrapper(self.inner.get(entity.id()))
+        };
+
+        Some(Box::new(wrapper))
     }
 }
 

@@ -199,7 +199,8 @@ impl<'a> System<'a> for AddIntToFloat {
         }
 
         // An alternative way to write this out:
-        // (note that `entities` is just another system data of type `Èntities<'a>`)
+        // (note that `entities` is just another system data of type
+        // `Èntities<'a>`)
         //
         // ```
         // for (entity, f) in (&entities, &comp_float).join() {

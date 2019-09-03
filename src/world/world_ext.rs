@@ -11,6 +11,8 @@ use crate::{
 };
 use shred::{Fetch, FetchMut, MetaTable, Read, Resource, SystemData, World};
 
+use std::fmt::Debug;
+
 /// This trait provides some extension methods to make working with shred's
 /// [World] easier.
 ///
@@ -287,6 +289,9 @@ pub trait WorldExt {
     /// Additionally, `LazyUpdate` will be merged.
     fn maintain(&mut self);
 
+    /// If the entity exists, then get a printable debug representation
+    fn debug_entity(&self, ent: Entity) -> Box<dyn Debug + '_>;
+
     #[doc(hidden)]
     fn delete_components(&mut self, delete: &[Entity]);
 }
@@ -405,6 +410,50 @@ impl WorldExt for World {
         let mut lazy = self.write_resource::<LazyUpdate>().take();
         lazy.maintain(&mut *self);
         self.write_resource::<LazyUpdate>().restore(lazy);
+    }
+
+    fn debug_entity(&self, ent: Entity) -> Box<dyn Debug + '_> {
+        use std::fmt::{Formatter, Result};
+
+        type Table<'a> = Read<'a, MetaTable<dyn AnyStorage>>;
+
+        struct Inner<'a> {
+            ent: Entity,
+            world: &'a World
+        }
+
+        impl<'a> Debug for Inner<'a> {
+            fn fmt(&self, fmt: &mut Formatter) -> Result {
+                let table: Table = self.world.system_data();
+
+                let mut s = fmt.debug_struct("Entity");
+
+                let is_alive = self.world.is_alive(self.ent);
+                s.field("entity", &format!(
+                    "(id={}, gen={}, dead={})", 
+                    self.ent.id(), 
+                    self.ent.gen().id(),
+                    !is_alive));
+
+                if is_alive {
+                    for table in table.iter(&self.world) {
+                        let dbg = match table.debug_entity(self.ent) {
+                            Some(x) => x,
+                            None => continue
+                        };
+
+                        s.field(dbg.type_name(), &dbg);
+                    }
+                }
+
+                s.finish()
+            }
+        }
+
+        Box::new(Inner {
+            ent,
+            world: self
+        })
     }
 
     fn delete_components(&mut self, delete: &[Entity]) {
